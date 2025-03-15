@@ -5,8 +5,8 @@ import logging
 import asyncio
 import aiohttp
 import signal
-from aiogram import Bot, Dispatcher
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram import Bot, Dispatcher, types
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
 from aiogram.enums.parse_mode import ParseMode
 from aiogram.filters import Command
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -33,17 +33,19 @@ bot = Bot(token=TOKEN)
 # Создаем объект диспетчера для обработки команд с использованием MemoryStorage
 dp = Dispatcher(storage=MemoryStorage())
 
-# Создаем кнопки для клавиатуры
-button_start = KeyboardButton(text="/start")  # Кнопка для команды /start
-button_info = KeyboardButton(text="/info")  # Кнопка для команды /info
-button_pic = KeyboardButton(text="/random_pic")  # Кнопка для команды /random_pic
+inline_kb = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="Перейти на сайт", url="https://example.com")],
+    [InlineKeyboardButton(text="Получить больше информации", callback_data="more_info")]
+])
 
-# Создаем объект клавиатуры с кнопками
-keyBoard = ReplyKeyboardMarkup(
-    keyboard=[[button_start, button_info], [button_pic]],  # Располагаем кнопки в строках
-    one_time_keyboard=False  # Клавиатура остается на экране после использования
-)
-
+# Функция установки команд бота
+async def set_commands(bot: Bot):
+    commands = [
+        BotCommand(command="start", description="Запустить бота"),  # Команда для старта бота
+        BotCommand(command="info", description="Вести информацию об авторе"),  # Команда для информации об авторе
+        BotCommand(command="random_pic", description="Получить случайную картинку 800 на 600")
+    ]
+    await bot.set_my_commands(commands)  # Установка списка команд в боте
 # Обработчик команды /random_pic - отправляет случайное изображение пользователю
 @dp.message(Command("random_pic"))
 async def random_pic(message: Message):
@@ -76,7 +78,7 @@ async def start(message: Message):
 _Здравствуйте!_"""  # Сообщение пользователю с использованием Markdown
     await message.answer("Получаю данные...")  # Отправляем сообщение перед выполнением команды
     await asyncio.sleep(1)  # Имитация задержки выполнения
-    await message.answer(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyBoard)  # Отправляем сообщение и показываем клавиатуру
+    await message.answer(text, parse_mode=ParseMode.MARKDOWN, reply_markup=inline_kb)  # Отправляем сообщение и показываем клавиатуру
 
 # Обработчик команды /info - отправляет пользователю список доступных команд
 @dp.message(Command("info"))
@@ -87,6 +89,11 @@ async def info(message: Message):
 <i>/random_pic</i> - сгенерировать случайную картинку
 """
     await message.answer(text, parse_mode=ParseMode.HTML)  # Отправляем сообщение в формате HTML
+
+@dp.callback_query(lambda c: c.data == "more_info")
+async def process_callback(callback_query: types.CallbackQuery):
+    await callback_query.answer()
+    await callback_query.message.answer("Вот дополнительная информация!")
 
 async def wait_for_exit(stop_event):
     """Ожидает завершения работы бота через Ctrl+C (для Windows)."""
@@ -99,27 +106,16 @@ async def wait_for_exit(stop_event):
 
 # Основная асинхронная функция для запуска бота с обработкой завершения работы
 async def main():
-    loop = asyncio.get_running_loop()
-    stop_event = asyncio.Event()
-    
-    def shutdown():
-        logger.info("Получен сигнал завершения, выключаюсь...")
-        stop_event.set()
-    
-    if os.name != "nt":  # Только для Unix-систем
-        loop.add_signal_handler(signal.SIGTERM, shutdown)
-        loop.add_signal_handler(signal.SIGINT, shutdown)
-    else:  # Windows: используем альтернативный способ завершения
-        asyncio.create_task(wait_for_exit(stop_event))
-
-    
-    await dp.start_polling(bot, stop_event=stop_event)
+    await set_commands(bot)
+    print("Бот запускается...")
+    logger.info("Бот включается")  # Логирование запуска
+    await dp.start_polling(bot, shutdown_timeout=5)
 
 # Запускаем бота, если скрипт выполняется напрямую
 if __name__ == '__main__':
     try:
         asyncio.run(main())  # Запускаем главный цикл бота
     except Exception as e:
-        logger.error(f"Ошибка: {traceback.format_exc()}")  # Логируем ошибку в случае сбоя
-        print(f"Ошибка: {traceback.format_exc()}")  # Выводим ошибку в консоль
+        logger.error(f"Ошибка: {e}")  # Логируем ошибку в случае сбоя
+        print(f"Ошибка: {e}")  # Выводим ошибку в консоль
 		
